@@ -1,23 +1,17 @@
-const abi = require("ethereumjs-abi");
 const chai = require('chai');
-const { expect, expectRevert } = require("chai");
+const { expect } = require("chai");
 const chaiAsPromised = require('chai-as-promised');
 const chaiBN = require('chai-bn');
 const { ethers } = require("hardhat");
 const {BN} = require('bn.js');
-const { defaultAbiCoder } = ethers.utils;
-// const logDecoder = require('../helper/log-decoder.js');
 
 chai
   .use(chaiAsPromised)
   .use(chaiBN(BN))
   .should()
 
-const should = chai.should();
-
 describe("AaveIncentivesController configureAssets", function () {
     let emissionManager;
-    // let anyXAddress;
     let accounts;
     let contractToInteract;
     let biconomyDistributionManager;
@@ -31,7 +25,6 @@ describe("AaveIncentivesController configureAssets", function () {
         biconomyDistributionManager = await DistributionManager.deploy(emissionManager, "3153600000");
         await biconomyDistributionManager.deployed();
 
-        console.log(biconomyDistributionManager.address);
         contractToInteract = await ethers.getContractAt(
           "contracts/AaveDistributionManager.sol:AaveDistributionManager",
           biconomyDistributionManager.address);

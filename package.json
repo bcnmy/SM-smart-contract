@@ -8,6 +8,7 @@
     "hardhat": "^2.8.4"
   },
   "dependencies": {
+    "bignumber.js": "^9.0.2",
     "bn.js": "^5.2.0",
     "chai-as-promised": "^7.1.1",
     "chai-bn": "^0.3.1"

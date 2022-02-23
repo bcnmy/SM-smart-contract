@@ -25,7 +25,7 @@ import "./lib/SafeERC20.sol";
  * @notice Contract to stake Aave token, tokenize the position and get rewards, inheriting from a distribution manager contract
  * @author Aave
  **/
-contract StakedTokenBptRev2 is
+contract StakedTokenV3 is
   IStakedAave,
   GovernancePowerWithSnapshot,
   VersionedInitializable,

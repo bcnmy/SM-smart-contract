@@ -5,17 +5,13 @@ const chaiBN = require('chai-bn');
 const { ethers } = require("hardhat");
 const {BN} = require('bn.js');
 const {BigNumber} = require('bignumber.js');
-
+const { getRewards } = require('./helper/base-math');
+const MAX_UINT_AMOUNT =
+  '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 chai
   .use(chaiAsPromised)
   .use(chaiBN(BN))
   .should()
-
-const should = chai.should();
-// type AssetConfig = {
-//     totalStaked: BigNumberish;
-//     emissionPerSecond: BigNumberish;
-//   };
 
 describe("StakedAave V2. Basics", function () {
     let emissionManager;
@@ -25,10 +21,13 @@ describe("StakedAave V2. Basics", function () {
     let distributionDuration;
     let stakedTokenV2;
     let bicoToken;
+    let bicoRewardPool;
+    let rewardPoolToInteract;
     let STAKED_AAVE_NAME, STAKED_AAVE_SYMBOL, STAKED_AAVE_DECIMALS, COOLDOWN_SECONDS, UNSTAKE_WINDOW ;
     let rewardsVault;
     let ZERO_ADDRESS;
     let assetConfig;
+    let secondStaker;
 
     before(async function () {
         STAKED_AAVE_NAME = 'Staked Aave';
@@ -40,11 +39,13 @@ describe("StakedAave V2. Basics", function () {
         ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
         
         accounts = await ethers.getSigners(); 
-        emissionManager = await accounts[0].getAddress(); 
+        emissionManager = await accounts[0]; 
         
-        rewardsVault = await accounts[2].getAddress();
-        sender = await accounts[3];
-        staker = await accounts[4];
+        rewardsVault = await accounts[1].getAddress();
+        sender = await accounts[2];
+        staker = await accounts[3];
+        secondStaker = accounts[4];
+        thirdStaker = accounts[5];
 
         // Deploy Test Bico Tokens
         const BicoToken = await ethers.getContractFactory("Bico");
@@ -53,10 +54,14 @@ describe("StakedAave V2. Basics", function () {
             "BICO"
         );
         await bicoToken.deployed();
-
-        console.log(bicoToken.address);
         bicoToInteract = await ethers.getContractAt("contracts/mock/Bico.sol:Bico",bicoToken.address);
 
+        // Deploy BicoReservePool
+        const BicoReservePool = await ethers.getContractFactory("BicoProtocolEcosystemReserve");
+        bicoRewardPool = await BicoReservePool.deploy();
+        await bicoRewardPool.deployed();
+        rewardPoolToInteract = await ethers.getContractAt("contracts/BicoProtocolEcosystemReserve.sol:BicoProtocolEcosystemReserve",bicoRewardPool.address);
+        
         // Deploy Staking contract
         const StakedToken = await ethers.getContractFactory("StakedTokenV3");
         stakedTokenV2 = await StakedToken.deploy(
@@ -64,8 +69,8 @@ describe("StakedAave V2. Basics", function () {
             bicoToken.address, 
             COOLDOWN_SECONDS,
             UNSTAKE_WINDOW, 
-            rewardsVault, 
-            emissionManager,
+            bicoRewardPool.address, 
+            emissionManager.address,
             distributionDuration, 
             STAKED_AAVE_NAME,
             STAKED_AAVE_SYMBOL, 
@@ -73,8 +78,6 @@ describe("StakedAave V2. Basics", function () {
             ZERO_ADDRESS
         );
         await stakedTokenV2.deployed();
-
-        console.log(stakedTokenV2.address);
         contractToInteract = await ethers.getContractAt("contracts/StakedTokenV3.sol:StakedTokenV3",stakedTokenV2.address);
         
         //Configure asset to be staked
@@ -93,6 +96,15 @@ describe("StakedAave V2. Basics", function () {
 
         // mint Bico to staker address
         await bicoToInteract.connect(sender)._mint(staker.address, ethers.utils.parseEther('1000'));
+        await bicoToInteract.connect(sender)._mint(bicoRewardPool.address, ethers.utils.parseEther('100000'));
+        await bicoToInteract.connect(sender)._mint(secondStaker.address, ethers.utils.parseEther('5000'));
+        await bicoToInteract.connect(sender)._mint(thirdStaker.address, ethers.utils.parseEther('5000'));
+
+        //Set Funds admin
+        await rewardPoolToInteract.connect(sender).initialize(emissionManager.address )
+
+        //Approve Reward pool to staking contract
+        await rewardPoolToInteract.connect(emissionManager).approve(bicoToken.address, stakedTokenV2.address, ethers.utils.parseEther('100000') )
     });
 
     it('Initial configuration after initialize() is correct', async () => {
@@ -105,7 +117,7 @@ describe("StakedAave V2. Basics", function () {
         expect(await contractToInteract.REWARD_TOKEN()).to.be.equal(bicoToken.address);
         expect((await contractToInteract.COOLDOWN_SECONDS()).toString()).to.be.equal(COOLDOWN_SECONDS);
         expect((await contractToInteract.UNSTAKE_WINDOW()).toString()).to.be.equal(UNSTAKE_WINDOW);
-        expect(await contractToInteract.REWARDS_VAULT()).to.be.equal(rewardsVault);
+        expect(await contractToInteract.REWARDS_VAULT()).to.be.equal(bicoRewardPool.address);
     });
 
     it('Reverts trying to stake 0 amount', async () => {
@@ -125,17 +137,16 @@ describe("StakedAave V2. Basics", function () {
 
     it('User 1 stakes 50 AAVE: receives 50 SAAVE, StakedAave balance of AAVE is 50 and his rewards to claim are 0', async () => {
         const amount = ethers.utils.parseEther('50');
-        const rewardsBalanceBefore = new BigNumber(
-            await (await contractToInteract.getTotalRewardsBalance(staker.address)).toString()
+        const rewardsBalanceBefore = await contractToInteract.getTotalRewardsBalance(staker.address);
+
+        const userIndexBefore = new BigNumber(
+            await (await contractToInteract.getUserAssetData(staker.address, stakedTokenV2.address)).toString()
         );
-        console.log(`rewardsBalanceBefore: ${rewardsBalanceBefore}`);
 
         const saveBalanceBefore = new BigNumber(
           (await contractToInteract.balanceOf(staker.address)).toString()
         );
-        console.log(`saveBalanceBefore: ${saveBalanceBefore}`);
 
-    
         // Prepare actions for the test case
         await bicoToInteract.connect(staker).approve(stakedTokenV2.address, amount);
         await contractToInteract.connect(staker).stake(staker.address, amount);
@@ -143,16 +154,18 @@ describe("StakedAave V2. Basics", function () {
         const saveBalanceAfter = new BigNumber(
             (await contractToInteract.balanceOf(staker.address)).toString()
         );
-        console.log(`saveBalanceAfter: ${saveBalanceAfter}`);
-        // Check rewards
-        
-        const rewardsBalanceAfter = new BigNumber(
-            await (await contractToInteract.getTotalRewardsBalance(staker.address)).toString()
+       
+        // Check rewards 
+        const rewardsBalanceAfter = await contractToInteract.getTotalRewardsBalance(staker.address);
+
+        const userIndexAfter = new BigNumber(
+            await (await contractToInteract.getUserAssetData(staker.address, stakedTokenV2.address)).toString()
         );
-        console.log(`rewardsBalanceAfter: ${rewardsBalanceAfter}`);
+
+        const expectedAccruedRewards = getRewards(saveBalanceBefore, userIndexAfter, userIndexBefore);
 
         // Stake token tests
-        expect(rewardsBalanceBefore.toString()).to.eq(rewardsBalanceAfter.toString());
+        expect(rewardsBalanceAfter).to.eq(rewardsBalanceBefore.add(expectedAccruedRewards));
         expect((await contractToInteract.balanceOf(staker.address)).toString()).to.be.equal(
           saveBalanceBefore.plus(amount.toString()).toString()
         );
@@ -163,200 +176,254 @@ describe("StakedAave V2. Basics", function () {
         expect((await bicoToInteract.balanceOf(contractToInteract.address)).toString()).to.be.equal(amount);
     });
 
-    // it('User 1 stakes 20 AAVE more: his total SAAVE balance increases, StakedAave balance of Aave increases and his reward until now get accumulated', async () => {
-    // const {
-    //     stakedAaveV2,
-    //     aaveToken,
-    //     users: [, staker],
-    // } = testEnv;
-    // const amount = ethers.utils.parseEther('20');
+    it('User 1 stakes 20 AAVE more: his total SAAVE balance increases, StakedAave balance of Aave increases and his reward until now get accumulated', async () => {
+        const amount = ethers.utils.parseEther('20');
+        const userIndexBefore = new BigNumber(
+            await (await contractToInteract.getUserAssetData(staker.address, stakedTokenV2.address)).toString()
+        );
+        const saveBalanceBefore = new BigNumber(
+            (await contractToInteract.balanceOf(staker.address)).toString()
+        );
+        
+        await bicoToInteract.connect(staker).approve(stakedTokenV2.address, amount);
+        await contractToInteract.connect(staker).stake(staker.address, amount);
+        const userIndexAfter = new BigNumber(
+            await (await contractToInteract.getUserAssetData(staker.address, stakedTokenV2.address)).toString()
+        );
 
-    // const saveBalanceBefore = new BigNumber(
-    //     (await stakedAaveV2.balanceOf(staker.address)).toString()
-    // );
-    // const actions = () => [
-    //     aaveToken.connect(staker.signer).approve(stakedAaveV2.address, amount),
-    //     stakedAaveV2.connect(staker.signer).stake(staker.address, amount),
-    // ];
+        // Checks rewards
+        const expectedAccruedRewards = getRewards(saveBalanceBefore, userIndexAfter, userIndexBefore);
 
-    // // Checks rewards
-    // await compareRewardsAtAction(stakedAaveV2, staker.address, actions, true);
+        // Extra test checks
+        expect((await contractToInteract.balanceOf(staker.address)).toString()).to.be.equal(
+            saveBalanceBefore.plus(amount.toString()).toString()
+        );
+        expect((await bicoToInteract.balanceOf(stakedTokenV2.address)).toString()).to.be.equal(
+            saveBalanceBefore.plus(amount.toString()).toString()
+        );
+    });
 
-    // // Extra test checks
-    // expect((await stakedAaveV2.balanceOf(staker.address)).toString()).to.be.equal(
-    //     saveBalanceBefore.plus(amount.toString()).toString()
-    // );
-    // expect((await aaveToken.balanceOf(stakedAaveV2.address)).toString()).to.be.equal(
-    //     saveBalanceBefore.plus(amount.toString()).toString()
-    // );
-    // });
+    it('User 1 claim half rewards ', async () => {
+        await ethers.provider.send('evm_increaseTime', [1000]);
+        await ethers.provider.send('evm_mine', []);   
 
-    // it('User 1 claim half rewards ', async () => {
-    // const {
-    //     stakedAaveV2,
-    //     aaveToken,
-    //     users: [, staker],
-    // } = testEnv;
-    // // Increase time for bigger rewards
-    // await increaseTimeAndMine(1000);
+        const halfRewards = (await contractToInteract.stakerRewardsToClaim(staker.address)).div(2);
+        const saveUserBalance = await bicoToInteract.balanceOf(staker.address);
 
-    // const halfRewards = (await stakedAaveV2.stakerRewardsToClaim(staker.address)).div(2);
-    // const saveUserBalance = await aaveToken.balanceOf(staker.address);
+        await contractToInteract.connect(staker).claimRewards(staker.address, halfRewards);
 
-    // await stakedAaveV2.connect(staker.signer).claimRewards(staker.address, halfRewards);
+        const userBalanceAfterActions = await bicoToInteract.balanceOf(staker.address);
+        expect(userBalanceAfterActions.eq(saveUserBalance.add(halfRewards))).to.be.ok;
+    });
 
-    // const userBalanceAfterActions = await aaveToken.balanceOf(staker.address);
-    // expect(userBalanceAfterActions.eq(saveUserBalance.add(halfRewards))).to.be.ok;
-    // });
+    it('User 1 tries to claim higher reward than current rewards balance', async () => {
+        const saveUserBalance = await bicoToInteract.balanceOf(staker.address);
 
-    // it('User 1 tries to claim higher reward than current rewards balance', async () => {
-    // const {
-    //     stakedAaveV2,
-    //     aaveToken,
-    //     users: [, staker],
-    // } = testEnv;
+        // Try to claim more amount than accumulated
+        await expect(
+            contractToInteract
+            .connect(staker)
+            .claimRewards(staker.address, ethers.utils.parseEther('10000'))
+        ).to.be.revertedWith('INVALID_AMOUNT');
 
-    // const saveUserBalance = await aaveToken.balanceOf(staker.address);
+        const userBalanceAfterActions = await bicoToInteract.balanceOf(staker.address);
+        expect(userBalanceAfterActions.eq(saveUserBalance)).to.be.ok;
+    });
 
-    // // Try to claim more amount than accumulated
-    // await expect(
-    //     stakedAaveV2
-    //     .connect(staker.signer)
-    //     .claimRewards(staker.address, ethers.utils.parseEther('10000'))
-    // ).to.be.revertedWith('INVALID_AMOUNT');
+    it('User 1 claim all rewards', async () => {
+        const userAddress = staker.address;
 
-    // const userBalanceAfterActions = await aaveToken.balanceOf(staker.address);
-    // expect(userBalanceAfterActions.eq(saveUserBalance)).to.be.ok;
-    // });
+        const userBalance = await contractToInteract.balanceOf(userAddress);
+        const userAaveBalance = await bicoToInteract.balanceOf(userAddress);
+        const userRewards = await contractToInteract.stakerRewardsToClaim(userAddress);
 
-    // it('User 1 claim all rewards', async () => {
-    // const {
-    //     stakedAaveV2,
-    //     aaveToken,
-    //     users: [, staker],
-    // } = testEnv;
+        // Get index before actions
+        const userIndexBefore = new BigNumber(
+            await (await contractToInteract.getUserAssetData(staker.address, stakedTokenV2.address)).toString()
+        );
 
-    // const userAddress = staker.address;
-    // const underlyingAsset = stakedAaveV2.address;
+        // Claim rewards
+        await expect(contractToInteract.connect(staker).claimRewards(staker.address, MAX_UINT_AMOUNT));
 
-    // const userBalance = await stakedAaveV2.balanceOf(userAddress);
-    // const userAaveBalance = await aaveToken.balanceOf(userAddress);
-    // const userRewards = await stakedAaveV2.stakerRewardsToClaim(userAddress);
-    // // Get index before actions
-    // const userIndexBefore = await getUserIndex(stakedAaveV2, userAddress, underlyingAsset);
+        // Get index after actions
+        const userIndexAfter = new BigNumber(
+            await (await contractToInteract.getUserAssetData(staker.address, stakedTokenV2.address)).toString()
+        );
 
-    // // Claim rewards
-    // await expect(stakedAaveV2.connect(staker.signer).claimRewards(staker.address, MAX_UINT_AMOUNT));
+        const expectedAccruedRewards = getRewards(
+            userBalance,
+            userIndexAfter,
+            userIndexBefore
+        ).toString();
+        const userAaveBalanceAfterAction = (await bicoToInteract.balanceOf(userAddress)).toString();
 
-    // // Get index after actions
-    // const userIndexAfter = await getUserIndex(stakedAaveV2, userAddress, underlyingAsset);
+        expect(userAaveBalanceAfterAction).to.be.equal(
+            userAaveBalance.add(userRewards).add(expectedAccruedRewards).toString()
+        );
+    });
 
-    // const expectedAccruedRewards = getRewards(
-    //     userBalance,
-    //     userIndexAfter,
-    //     userIndexBefore
-    // ).toString();
-    // const userAaveBalanceAfterAction = (await aaveToken.balanceOf(userAddress)).toString();
+    it('User 2 stakes 50 AAVE, with the rewards not enabled', async () => {
+        const amount = ethers.utils.parseEther('50');
 
-    // expect(userAaveBalanceAfterAction).to.be.equal(
-    //     userAaveBalance.add(userRewards).add(expectedAccruedRewards).toString()
-    // );
-    // });
+        const userBalance = new BigNumber(
+            (await contractToInteract.balanceOf(secondStaker.address)).toString()
+        );
 
-    // it('User 6 stakes 50 AAVE, with the rewards not enabled', async () => {
-    // const { stakedAaveV2, aaveToken, users } = testEnv;
-    // const amount = ethers.utils.parseEther('50');
-    // const sixStaker = users[5];
+        // Checks rewards
+        const rewardsBalanceBefore = await contractToInteract.getTotalRewardsBalance(secondStaker.address)
+       
+        // Get index before actions
+        const userIndexBefore = new BigNumber(
+            await (await contractToInteract.getUserAssetData(secondStaker.address, stakedTokenV2.address)).toString()
+        );
+        
+        await bicoToInteract.connect(secondStaker).approve(stakedTokenV2.address, amount);
+        await contractToInteract.connect(secondStaker).stake(secondStaker.address, amount);
+        
+        const userIndexAfter = new BigNumber(
+            await (await contractToInteract.getUserAssetData(secondStaker.address, stakedTokenV2.address)).toString()
+        );
 
-    // // Disable rewards via config
-    // const assetsConfig = {
-    //     emissionPerSecond: '0',
-    //     totalStaked: '0',
-    // };
+        // Compare calculated JS rewards versus Solidity user rewards
+        const rewardsBalanceAfter = await contractToInteract.getTotalRewardsBalance(secondStaker.address);
+        const expectedAccruedRewards = getRewards(userBalance, userIndexAfter, userIndexBefore);
+        expect(rewardsBalanceAfter).to.eq(rewardsBalanceBefore.add(expectedAccruedRewards));
 
-    // // Checks rewards
-    // const actions = () => [
-    //     aaveToken.connect(sixStaker.signer).approve(stakedAaveV2.address, amount),
-    //     stakedAaveV2.connect(sixStaker.signer).stake(sixStaker.address, amount),
-    // ];
+        // Explicit check rewards when the test case expects rewards to the user
+        expect(expectedAccruedRewards).to.be.eq(0);
+        expect(rewardsBalanceAfter).to.be.eq(rewardsBalanceBefore);
+        
+        // Check expected stake balance for second staker
+        expect((await contractToInteract.balanceOf(secondStaker.address)).toString()).to.be.equal(
+            amount.toString()
+        );
 
-    // await compareRewardsAtAction(stakedAaveV2, sixStaker.address, actions, false, assetsConfig);
+        // Expect rewards balance to still be zero
+        const rewardsBalance = await (
+            await contractToInteract.getTotalRewardsBalance(secondStaker.address)
+        ).toString();
+        expect(rewardsBalance).to.be.equal('0');
+    });
 
-    // // Check expected stake balance for six staker
-    // expect((await stakedAaveV2.balanceOf(sixStaker.address)).toString()).to.be.equal(
-    //     amount.toString()
-    // );
+    it('User 2 stakes 30 AAVE more, with the rewards not enabled', async () => {
+        const amount = ethers.utils.parseEther('30');
 
-    // // Expect rewards balance to still be zero
-    // const rewardsBalance = await (
-    //     await stakedAaveV2.getTotalRewardsBalance(sixStaker.address)
-    // ).toString();
-    // expect(rewardsBalance).to.be.equal('0');
-    // });
+        // Keep rewards disabled via config
+        const assetsConfig = {
+            emissionPerSecond: '0',
+            totalStaked: '0',
+        };
 
-    // it('User 6 stakes 30 AAVE more, with the rewards not enabled', async () => {
-    // const { stakedAaveV2, aaveToken, users } = testEnv;
-    // const amount = ethers.utils.parseEther('30');
-    // const staker = users[1];
-    // const sixStaker = users[5];
-    // const saveBalanceBefore = new BigNumber(
-    //     (await stakedAaveV2.balanceOf(sixStaker.address)).toString()
-    // );
-    // // Keep rewards disabled via config
-    // const assetsConfig = {
-    //     emissionPerSecond: '0',
-    //     totalStaked: '0',
-    // };
+        const assetConfiguration = {
+            ...assetsConfig,
+            underlyingAsset: stakedTokenV2.address,
+        }
+        
+        await contractToInteract.configureAssets([assetConfiguration]);
 
-    // // Checks rewards
-    // const actions = () => [
-    //     aaveToken.connect(sixStaker.signer).approve(stakedAaveV2.address, amount),
-    //     stakedAaveV2.connect(sixStaker.signer).stake(sixStaker.address, amount),
-    // ];
+        const userBalance = new BigNumber(
+            (await contractToInteract.balanceOf(secondStaker.address)).toString()
+        );
 
-    // await compareRewardsAtAction(stakedAaveV2, sixStaker.address, actions, false, assetsConfig);
+        // Checks rewards
+        const rewardsBalanceBefore = await contractToInteract.getTotalRewardsBalance(secondStaker.address)
+       
+        // Get index before actions
+        const userIndexBefore = new BigNumber(
+            await (await contractToInteract.getUserAssetData(secondStaker.address, stakedTokenV2.address)).toString()
+        );
+        
+        await bicoToInteract.connect(secondStaker).approve(stakedTokenV2.address, amount);
+        await contractToInteract.connect(secondStaker).stake(secondStaker.address, amount);
+        
+        // await compareRewardsAtAction(stakedAaveV2, sixStaker.address, actions, false, assetsConfig);
 
-    // // Expect rewards balance to still be zero
-    // const rewardsBalance = await (
-    //     await stakedAaveV2.getTotalRewardsBalance(sixStaker.address)
-    // ).toString();
-    // expect(rewardsBalance).to.be.equal('0');
-    // });
+        const userIndexAfter = new BigNumber(
+            await (await contractToInteract.getUserAssetData(secondStaker.address, stakedTokenV2.address)).toString()
+        );
 
-    // it('Validates staker cooldown with stake() while being on valid unstake window', async () => {
-    // const { stakedAaveV2, aaveToken, users } = testEnv;
-    // const amount1 = ethers.utils.parseEther('50');
-    // const amount2 = ethers.utils.parseEther('20');
-    // const staker = users[4];
+        // Compare calculated JS rewards versus Solidity user rewards
+        const rewardsBalanceAfter = await contractToInteract.getTotalRewardsBalance(secondStaker.address);
+        const expectedAccruedRewards = getRewards(userBalance, userIndexAfter, userIndexBefore);
+        expect(rewardsBalanceAfter).to.eq(rewardsBalanceBefore.add(expectedAccruedRewards));
 
-    // // Checks rewards
-    // const actions = () => [
-    //     aaveToken.connect(staker.signer).approve(stakedAaveV2.address, amount1.add(amount2)),
-    //     stakedAaveV2.connect(staker.signer).stake(staker.address, amount1),
-    // ];
+        // Explicit check rewards when the test case expects rewards to the user
+        expect(expectedAccruedRewards).to.be.eq(0);
+        expect(rewardsBalanceAfter).to.be.eq(rewardsBalanceBefore);
 
-    // await compareRewardsAtAction(stakedAaveV2, staker.address, actions, false);
+        // Expect rewards balance to still be zero
+        const rewardsBalance = await (
+            await contractToInteract.getTotalRewardsBalance(secondStaker.address)
+        ).toString();
+        expect(rewardsBalance).to.be.equal('0');
+    });
 
-    // await stakedAaveV2.connect(staker.signer).cooldown();
+    it('Validates staker cooldown with stake() while being on valid unstake window', async () => {
+        const amount1 = ethers.utils.parseEther('50');
+        const amount2 = ethers.utils.parseEther('20');
+        const amount = ethers.utils.parseEther('50').add(ethers.utils.parseEther('20'));
 
-    // const cooldownActivationTimestamp = await timeLatest();
+        const userBalance = new BigNumber(
+            (await contractToInteract.balanceOf(thirdStaker.address)).toString()
+        );
 
-    // await advanceBlock(
-    //     cooldownActivationTimestamp.plus(new BigNumber(COOLDOWN_SECONDS).plus(1000)).toNumber()
-    // ); // We fast-forward time to just after the unstake window
+        // Checks rewards
+        const rewardsBalanceBefore = await contractToInteract.getTotalRewardsBalance(thirdStaker.address)
+       
+        // Get index before actions
+        const userIndexBefore = new BigNumber(
+            await (await contractToInteract.getUserAssetData(thirdStaker.address, stakedTokenV2.address)).toString()
+        );
+        
+        await bicoToInteract.connect(thirdStaker).approve(stakedTokenV2.address, amount);
+        await contractToInteract.connect(thirdStaker).stake(thirdStaker.address, amount1);
+        
+        const userIndexAfter = new BigNumber(
+            await (await contractToInteract.getUserAssetData(thirdStaker.address, stakedTokenV2.address)).toString()
+        );
 
-    // const stakerCooldownTimestampBefore = new BigNumber(
-    //     (await stakedAaveV2.stakersCooldowns(staker.address)).toString()
-    // );
-    // await waitForTx(await stakedAaveV2.connect(staker.signer).stake(staker.address, amount2));
-    // const latestTimestamp = await timeLatest();
-    // const expectedCooldownTimestamp = amount2
-    //     .mul(latestTimestamp.toString())
-    //     .add(amount1.mul(stakerCooldownTimestampBefore.toString()))
-    //     .div(amount2.add(amount1));
-    // expect(expectedCooldownTimestamp.toString()).to.be.equal(
-    //     (await stakedAaveV2.stakersCooldowns(staker.address)).toString()
-    // );
-    // });
+        // Compare calculated JS rewards versus Solidity user rewards
+        const rewardsBalanceAfter = await contractToInteract.getTotalRewardsBalance(thirdStaker.address);
+        const expectedAccruedRewards = getRewards(userBalance, userIndexAfter, userIndexBefore);
+        expect(rewardsBalanceAfter).to.eq(rewardsBalanceBefore.add(expectedAccruedRewards));
+
+        // Explicit check rewards when the test case expects rewards to the user
+        expect(expectedAccruedRewards).to.be.eq(0);
+        expect(rewardsBalanceAfter).to.be.eq(rewardsBalanceBefore);
+
+        await contractToInteract.connect(thirdStaker).cooldown();
+
+        const cooldownActivationTimestamp = new BigNumber((await ethers.provider.getBlock('latest')).timestamp);
+        await advanceBlock(
+            cooldownActivationTimestamp.plus(new BigNumber(COOLDOWN_SECONDS).plus(1000)).toNumber()
+        ); // We fast-forward time to just after the unstake window
+
+        const stakerCooldownTimestampBefore = new BigNumber(
+            (await contractToInteract.stakersCooldowns(thirdStaker.address)).toString()
+        );
+        let tx = await contractToInteract.connect(thirdStaker).stake(thirdStaker.address, amount2);
+        await tx.wait();
+
+        const latestTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
+
+        const expectedCooldownTimestamp = amount2
+            .mul(latestTimestamp.toString())
+            .add(amount1.mul(stakerCooldownTimestampBefore.toString()))
+            .div(amount2.add(amount1));
+
+        expect(expectedCooldownTimestamp.toString()).to.be.equal(
+            (await contractToInteract.stakersCooldowns(thirdStaker.address)).toString()
+        );
+    });
+
+    advanceBlock = async (timestamp) => {
+        const priorBlock = await ethers.provider.getBlockNumber();
+        await ethers.provider.send('evm_mine', timestamp ? [timestamp] : []);
+        const nextBlock = await ethers.provider.getBlockNumber();
+        if (!timestamp && nextBlock == priorBlock) {
+          await advanceBlock();
+          return;
+        }
+    };
     
 });

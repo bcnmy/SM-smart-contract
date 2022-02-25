@@ -17,12 +17,11 @@ describe("StakedAave V2. Basics", function () {
     let emissionManager;
     let sender;
     let accounts;
-    let contractToInteract, bicoToInteract;
     let distributionDuration;
     let stakedTokenV2;
     let bicoToken;
     let bicoRewardPool;
-    let rewardPoolToInteract;
+    let contractToInteract;
     let STAKED_AAVE_NAME, STAKED_AAVE_SYMBOL, STAKED_AAVE_DECIMALS, COOLDOWN_SECONDS, UNSTAKE_WINDOW ;
     let rewardsVault;
     let ZERO_ADDRESS;
@@ -30,8 +29,8 @@ describe("StakedAave V2. Basics", function () {
     let secondStaker;
 
     before(async function () {
-        STAKED_AAVE_NAME = 'Staked Aave';
-        STAKED_AAVE_SYMBOL = 'stkAAVE';
+        STAKED_AAVE_NAME = 'Staked Bico';
+        STAKED_AAVE_SYMBOL = 'stkBICO';
         STAKED_AAVE_DECIMALS = 18;
         COOLDOWN_SECONDS = '3600'; // 1 hour in seconds
         UNSTAKE_WINDOW = '1800'; // 30 min in seconds
@@ -54,13 +53,11 @@ describe("StakedAave V2. Basics", function () {
             "BICO"
         );
         await bicoToken.deployed();
-        bicoToInteract = await ethers.getContractAt("contracts/mock/Bico.sol:Bico",bicoToken.address);
 
         // Deploy BicoReservePool
         const BicoReservePool = await ethers.getContractFactory("BicoProtocolEcosystemReserve");
         bicoRewardPool = await BicoReservePool.deploy();
         await bicoRewardPool.deployed();
-        rewardPoolToInteract = await ethers.getContractAt("contracts/BicoProtocolEcosystemReserve.sol:BicoProtocolEcosystemReserve",bicoRewardPool.address);
         
         // Deploy Staking contract
         const StakedToken = await ethers.getContractFactory("StakedTokenV3");
@@ -95,16 +92,16 @@ describe("StakedAave V2. Basics", function () {
         await contractToInteract.configureAssets([assetConfiguration]);
 
         // mint Bico to staker address
-        await bicoToInteract.connect(sender)._mint(staker.address, ethers.utils.parseEther('1000'));
-        await bicoToInteract.connect(sender)._mint(bicoRewardPool.address, ethers.utils.parseEther('100000'));
-        await bicoToInteract.connect(sender)._mint(secondStaker.address, ethers.utils.parseEther('5000'));
-        await bicoToInteract.connect(sender)._mint(thirdStaker.address, ethers.utils.parseEther('5000'));
+        await bicoToken.connect(sender)._mint(staker.address, ethers.utils.parseEther('1000'));
+        await bicoToken.connect(sender)._mint(bicoRewardPool.address, ethers.utils.parseEther('100000'));
+        await bicoToken.connect(sender)._mint(secondStaker.address, ethers.utils.parseEther('5000'));
+        await bicoToken.connect(sender)._mint(thirdStaker.address, ethers.utils.parseEther('5000'));
 
         //Set Funds admin
-        await rewardPoolToInteract.connect(sender).initialize(emissionManager.address )
+        await bicoRewardPool.connect(sender).initialize(emissionManager.address )
 
         //Approve Reward pool to staking contract
-        await rewardPoolToInteract.connect(emissionManager).approve(bicoToken.address, stakedTokenV2.address, ethers.utils.parseEther('100000') )
+        await bicoRewardPool.connect(emissionManager).approve(bicoToken.address, stakedTokenV2.address, ethers.utils.parseEther('100000') )
     });
 
     it('Initial configuration after initialize() is correct', async () => {
@@ -135,7 +132,7 @@ describe("StakedAave V2. Basics", function () {
         );
     });
 
-    it('User 1 stakes 50 AAVE: receives 50 SAAVE, StakedAave balance of AAVE is 50 and his rewards to claim are 0', async () => {
+    it('User 1 stakes 50 BICO: receives 50 stkBICO, StakedAave balance of BICO is 50 and his rewards to claim are 0', async () => {
         const amount = ethers.utils.parseEther('50');
         const rewardsBalanceBefore = await contractToInteract.getTotalRewardsBalance(staker.address);
 
@@ -148,13 +145,9 @@ describe("StakedAave V2. Basics", function () {
         );
 
         // Prepare actions for the test case
-        await bicoToInteract.connect(staker).approve(stakedTokenV2.address, amount);
+        await bicoToken.connect(staker).approve(stakedTokenV2.address, amount);
         await contractToInteract.connect(staker).stake(staker.address, amount);
-        
-        const saveBalanceAfter = new BigNumber(
-            (await contractToInteract.balanceOf(staker.address)).toString()
-        );
-       
+    
         // Check rewards 
         const rewardsBalanceAfter = await contractToInteract.getTotalRewardsBalance(staker.address);
 
@@ -169,36 +162,31 @@ describe("StakedAave V2. Basics", function () {
         expect((await contractToInteract.balanceOf(staker.address)).toString()).to.be.equal(
           saveBalanceBefore.plus(amount.toString()).toString()
         );
-        expect((await bicoToInteract.balanceOf(contractToInteract.address)).toString()).to.be.equal(
+        expect((await bicoToken.balanceOf(contractToInteract.address)).toString()).to.be.equal(
           saveBalanceBefore.plus(amount.toString()).toString()
         );
         expect((await contractToInteract.balanceOf(staker.address)).toString()).to.be.equal(amount);
-        expect((await bicoToInteract.balanceOf(contractToInteract.address)).toString()).to.be.equal(amount);
+        expect((await bicoToken.balanceOf(contractToInteract.address)).toString()).to.be.equal(amount);
     });
 
-    it('User 1 stakes 20 AAVE more: his total SAAVE balance increases, StakedAave balance of Aave increases and his reward until now get accumulated', async () => {
+    it('User 1 stakes 20 BICO more: his total stkBICO balance increases, StakedBico balance of Aave increases and his reward until now get accumulated', async () => {
         const amount = ethers.utils.parseEther('20');
-        const userIndexBefore = new BigNumber(
-            await (await contractToInteract.getUserAssetData(staker.address, stakedTokenV2.address)).toString()
-        );
+
         const saveBalanceBefore = new BigNumber(
             (await contractToInteract.balanceOf(staker.address)).toString()
         );
         
-        await bicoToInteract.connect(staker).approve(stakedTokenV2.address, amount);
+        await bicoToken.connect(staker).approve(stakedTokenV2.address, amount);
         await contractToInteract.connect(staker).stake(staker.address, amount);
         const userIndexAfter = new BigNumber(
             await (await contractToInteract.getUserAssetData(staker.address, stakedTokenV2.address)).toString()
         );
 
-        // Checks rewards
-        const expectedAccruedRewards = getRewards(saveBalanceBefore, userIndexAfter, userIndexBefore);
-
         // Extra test checks
         expect((await contractToInteract.balanceOf(staker.address)).toString()).to.be.equal(
             saveBalanceBefore.plus(amount.toString()).toString()
         );
-        expect((await bicoToInteract.balanceOf(stakedTokenV2.address)).toString()).to.be.equal(
+        expect((await bicoToken.balanceOf(stakedTokenV2.address)).toString()).to.be.equal(
             saveBalanceBefore.plus(amount.toString()).toString()
         );
     });
@@ -208,16 +196,16 @@ describe("StakedAave V2. Basics", function () {
         await ethers.provider.send('evm_mine', []);   
 
         const halfRewards = (await contractToInteract.stakerRewardsToClaim(staker.address)).div(2);
-        const saveUserBalance = await bicoToInteract.balanceOf(staker.address);
+        const saveUserBalance = await bicoToken.balanceOf(staker.address);
 
         await contractToInteract.connect(staker).claimRewards(staker.address, halfRewards);
 
-        const userBalanceAfterActions = await bicoToInteract.balanceOf(staker.address);
+        const userBalanceAfterActions = await bicoToken.balanceOf(staker.address);
         expect(userBalanceAfterActions.eq(saveUserBalance.add(halfRewards))).to.be.ok;
     });
 
     it('User 1 tries to claim higher reward than current rewards balance', async () => {
-        const saveUserBalance = await bicoToInteract.balanceOf(staker.address);
+        const saveUserBalance = await bicoToken.balanceOf(staker.address);
 
         // Try to claim more amount than accumulated
         await expect(
@@ -226,7 +214,7 @@ describe("StakedAave V2. Basics", function () {
             .claimRewards(staker.address, ethers.utils.parseEther('10000'))
         ).to.be.revertedWith('INVALID_AMOUNT');
 
-        const userBalanceAfterActions = await bicoToInteract.balanceOf(staker.address);
+        const userBalanceAfterActions = await bicoToken.balanceOf(staker.address);
         expect(userBalanceAfterActions.eq(saveUserBalance)).to.be.ok;
     });
 
@@ -234,7 +222,7 @@ describe("StakedAave V2. Basics", function () {
         const userAddress = staker.address;
 
         const userBalance = await contractToInteract.balanceOf(userAddress);
-        const userAaveBalance = await bicoToInteract.balanceOf(userAddress);
+        const userAaveBalance = await bicoToken.balanceOf(userAddress);
         const userRewards = await contractToInteract.stakerRewardsToClaim(userAddress);
 
         // Get index before actions
@@ -255,14 +243,14 @@ describe("StakedAave V2. Basics", function () {
             userIndexAfter,
             userIndexBefore
         ).toString();
-        const userAaveBalanceAfterAction = (await bicoToInteract.balanceOf(userAddress)).toString();
+        const userAaveBalanceAfterAction = (await bicoToken.balanceOf(userAddress)).toString();
 
         expect(userAaveBalanceAfterAction).to.be.equal(
             userAaveBalance.add(userRewards).add(expectedAccruedRewards).toString()
         );
     });
 
-    it('User 2 stakes 50 AAVE, with the rewards not enabled', async () => {
+    it('User 2 stakes 50 BICO, with the rewards not enabled', async () => {
         const amount = ethers.utils.parseEther('50');
 
         const userBalance = new BigNumber(
@@ -277,7 +265,7 @@ describe("StakedAave V2. Basics", function () {
             await (await contractToInteract.getUserAssetData(secondStaker.address, stakedTokenV2.address)).toString()
         );
         
-        await bicoToInteract.connect(secondStaker).approve(stakedTokenV2.address, amount);
+        await bicoToken.connect(secondStaker).approve(stakedTokenV2.address, amount);
         await contractToInteract.connect(secondStaker).stake(secondStaker.address, amount);
         
         const userIndexAfter = new BigNumber(
@@ -305,7 +293,7 @@ describe("StakedAave V2. Basics", function () {
         expect(rewardsBalance).to.be.equal('0');
     });
 
-    it('User 2 stakes 30 AAVE more, with the rewards not enabled', async () => {
+    it('User 2 stakes 30 BICO more, with the rewards not enabled', async () => {
         const amount = ethers.utils.parseEther('30');
 
         // Keep rewards disabled via config
@@ -333,7 +321,7 @@ describe("StakedAave V2. Basics", function () {
             await (await contractToInteract.getUserAssetData(secondStaker.address, stakedTokenV2.address)).toString()
         );
         
-        await bicoToInteract.connect(secondStaker).approve(stakedTokenV2.address, amount);
+        await bicoToken.connect(secondStaker).approve(stakedTokenV2.address, amount);
         await contractToInteract.connect(secondStaker).stake(secondStaker.address, amount);
         
         // await compareRewardsAtAction(stakedAaveV2, sixStaker.address, actions, false, assetsConfig);
@@ -375,7 +363,7 @@ describe("StakedAave V2. Basics", function () {
             await (await contractToInteract.getUserAssetData(thirdStaker.address, stakedTokenV2.address)).toString()
         );
         
-        await bicoToInteract.connect(thirdStaker).approve(stakedTokenV2.address, amount);
+        await bicoToken.connect(thirdStaker).approve(stakedTokenV2.address, amount);
         await contractToInteract.connect(thirdStaker).stake(thirdStaker.address, amount1);
         
         const userIndexAfter = new BigNumber(

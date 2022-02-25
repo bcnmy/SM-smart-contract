@@ -13,7 +13,7 @@ chai
   .use(chaiBN(BN))
   .should()
 
-describe("StakedAave V2. Basics", function () {
+describe("StakedToken V2. Basics", function () {
     let emissionManager;
     let sender;
     let accounts;
@@ -22,16 +22,16 @@ describe("StakedAave V2. Basics", function () {
     let bicoToken;
     let bicoRewardPool;
     let contractToInteract;
-    let STAKED_AAVE_NAME, STAKED_AAVE_SYMBOL, STAKED_AAVE_DECIMALS, COOLDOWN_SECONDS, UNSTAKE_WINDOW ;
+    let STAKED_TOKEN_NAME, STAKED_TOKEN_SYMBOL, STAKED_TOKEN_DECIMALS, COOLDOWN_SECONDS, UNSTAKE_WINDOW ;
     let rewardsVault;
     let ZERO_ADDRESS;
     let assetConfig;
     let secondStaker;
 
     before(async function () {
-        STAKED_AAVE_NAME = 'Staked Bico';
-        STAKED_AAVE_SYMBOL = 'stkBICO';
-        STAKED_AAVE_DECIMALS = 18;
+        STAKED_TOKEN_NAME = 'Staked Bico';
+        STAKED_TOKEN_SYMBOL = 'stkBICO';
+        STAKED_TOKEN_DECIMALS = 18;
         COOLDOWN_SECONDS = '3600'; // 1 hour in seconds
         UNSTAKE_WINDOW = '1800'; // 30 min in seconds
         distributionDuration = 3153600000;
@@ -69,9 +69,9 @@ describe("StakedAave V2. Basics", function () {
             bicoRewardPool.address, 
             emissionManager.address,
             distributionDuration, 
-            STAKED_AAVE_NAME,
-            STAKED_AAVE_SYMBOL, 
-            STAKED_AAVE_DECIMALS, 
+            STAKED_TOKEN_NAME,
+            STAKED_TOKEN_SYMBOL, 
+            STAKED_TOKEN_DECIMALS, 
             ZERO_ADDRESS
         );
         await stakedTokenV2.deployed();
@@ -106,9 +106,9 @@ describe("StakedAave V2. Basics", function () {
 
     it('Initial configuration after initialize() is correct', async () => {
     
-        expect(await contractToInteract.name()).to.be.equal(STAKED_AAVE_NAME);
-        expect(await contractToInteract.symbol()).to.be.equal(STAKED_AAVE_SYMBOL);
-        expect(await contractToInteract.decimals()).to.be.equal(STAKED_AAVE_DECIMALS);
+        expect(await contractToInteract.name()).to.be.equal(STAKED_TOKEN_NAME);
+        expect(await contractToInteract.symbol()).to.be.equal(STAKED_TOKEN_SYMBOL);
+        expect(await contractToInteract.decimals()).to.be.equal(STAKED_TOKEN_DECIMALS);
         expect(await contractToInteract.REVISION()).to.be.equal(1);
         expect(await contractToInteract.STAKED_TOKEN()).to.be.equal(bicoToken.address);
         expect(await contractToInteract.REWARD_TOKEN()).to.be.equal(bicoToken.address);
@@ -132,7 +132,7 @@ describe("StakedAave V2. Basics", function () {
         );
     });
 
-    it('User 1 stakes 50 BICO: receives 50 stkBICO, StakedAave balance of BICO is 50 and his rewards to claim are 0', async () => {
+    it('User 1 stakes 50 BICO: receives 50 stkBICO, StakedToken balance of BICO is 50 and his rewards to claim are 0', async () => {
         const amount = ethers.utils.parseEther('50');
         const rewardsBalanceBefore = await contractToInteract.getTotalRewardsBalance(staker.address);
 
@@ -169,7 +169,7 @@ describe("StakedAave V2. Basics", function () {
         expect((await bicoToken.balanceOf(contractToInteract.address)).toString()).to.be.equal(amount);
     });
 
-    it('User 1 stakes 20 BICO more: his total stkBICO balance increases, StakedBico balance of Aave increases and his reward until now get accumulated', async () => {
+    it('User 1 stakes 20 BICO more: his total stkBICO balance increases, StakedToken balance of Bico increases and his reward until now get accumulated', async () => {
         const amount = ethers.utils.parseEther('20');
 
         const saveBalanceBefore = new BigNumber(
@@ -222,7 +222,7 @@ describe("StakedAave V2. Basics", function () {
         const userAddress = staker.address;
 
         const userBalance = await contractToInteract.balanceOf(userAddress);
-        const userAaveBalance = await bicoToken.balanceOf(userAddress);
+        const userBicoBalance = await bicoToken.balanceOf(userAddress);
         const userRewards = await contractToInteract.stakerRewardsToClaim(userAddress);
 
         // Get index before actions
@@ -243,10 +243,10 @@ describe("StakedAave V2. Basics", function () {
             userIndexAfter,
             userIndexBefore
         ).toString();
-        const userAaveBalanceAfterAction = (await bicoToken.balanceOf(userAddress)).toString();
+        const userBicoBalanceAfterAction = (await bicoToken.balanceOf(userAddress)).toString();
 
-        expect(userAaveBalanceAfterAction).to.be.equal(
-            userAaveBalance.add(userRewards).add(expectedAccruedRewards).toString()
+        expect(userBicoBalanceAfterAction).to.be.equal(
+            userBicoBalance.add(userRewards).add(expectedAccruedRewards).toString()
         );
     });
 
@@ -324,8 +324,6 @@ describe("StakedAave V2. Basics", function () {
         await bicoToken.connect(secondStaker).approve(stakedTokenV2.address, amount);
         await contractToInteract.connect(secondStaker).stake(secondStaker.address, amount);
         
-        // await compareRewardsAtAction(stakedAaveV2, sixStaker.address, actions, false, assetsConfig);
-
         const userIndexAfter = new BigNumber(
             await (await contractToInteract.getUserAssetData(secondStaker.address, stakedTokenV2.address)).toString()
         );

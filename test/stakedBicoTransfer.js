@@ -11,7 +11,7 @@ chai
   .use(chaiBN(BN))
   .should()
 
-describe("StakedAave V2. Basics", function () {
+describe("StakedToken V2. Basics", function () {
     let emissionManager;
     let accounts;
     let bicoToInteract;
@@ -20,7 +20,7 @@ describe("StakedAave V2. Basics", function () {
     let bicoToken;
     let bicoRewardPool;
     let rewardPoolToInteract;
-    let STAKED_AAVE_NAME, STAKED_AAVE_SYMBOL, STAKED_AAVE_DECIMALS, COOLDOWN_SECONDS, UNSTAKE_WINDOW ;
+    let STAKED_TOKEN_NAME, STAKED_TOKEN_SYMBOL, STAKED_TOKEN_DECIMALS, COOLDOWN_SECONDS, UNSTAKE_WINDOW ;
     let ZERO_ADDRESS;
     let assetConfig;
     let user1;
@@ -30,9 +30,9 @@ describe("StakedAave V2. Basics", function () {
     let toAddress;
 
     before(async function () {
-        STAKED_AAVE_NAME = 'Staked Bico';
-        STAKED_AAVE_SYMBOL = 'stkBICO';
-        STAKED_AAVE_DECIMALS = 18;
+        STAKED_TOKEN_NAME = 'Staked Bico';
+        STAKED_TOKEN_SYMBOL = 'stkBICO';
+        STAKED_TOKEN_DECIMALS = 18;
         COOLDOWN_SECONDS = '3600'; // 1 hour in seconds
         UNSTAKE_WINDOW = '1800'; // 30 min in seconds
         distributionDuration = 3153600000;
@@ -72,9 +72,9 @@ describe("StakedAave V2. Basics", function () {
             bicoRewardPool.address, 
             emissionManager.address,
             distributionDuration, 
-            STAKED_AAVE_NAME,
-            STAKED_AAVE_SYMBOL, 
-            STAKED_AAVE_DECIMALS, 
+            STAKED_TOKEN_NAME,
+            STAKED_TOKEN_SYMBOL, 
+            STAKED_TOKEN_DECIMALS,
             ZERO_ADDRESS
         );
         await stakedTokenV2.deployed();
@@ -234,7 +234,7 @@ describe("StakedAave V2. Basics", function () {
         await increaseTimeAndMine(
             receiverCooldown.add(COOLDOWN_SECONDS).add(UNSTAKE_WINDOW).add(1).toNumber()
         );
-        // Transfer staked aave from sender to receiver, it will also transfer the cooldown status from sender to the receiver
+        // Transfer staked token from sender to receiver, it will also transfer the cooldown status from sender to the receiver
         const stakerBalance = new BigNumber(
             (await stakedTokenV2.balanceOf(user1.address)).toString()
         );
@@ -274,7 +274,7 @@ describe("StakedAave V2. Basics", function () {
             await stakedTokenV2.stakersCooldowns(user2.address)
         ).toString();
 
-        // Transfer staked aave from sender to receiver, it will also transfer the cooldown status from sender to the receiver
+        // Transfer staked token from sender to receiver, it will also transfer the cooldown status from sender to the receiver
         const stakerBalance = new BigNumber(
             (await stakedTokenV2.balanceOf(user1.address)).toString()
         );

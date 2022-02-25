@@ -5,15 +5,12 @@ const chaiBN = require('chai-bn');
 const { ethers } = require("hardhat");
 const {BN} = require('bn.js');
 const {BigNumber} = require('bignumber.js');
-const { getRewards } = require('./helper/base-math');
-const MAX_UINT_AMOUNT =
-  '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 chai
   .use(chaiAsPromised)
   .use(chaiBN(BN))
   .should()
 
-describe("StakedAave V2. Basics", function () {
+describe("StakedToken V2. Basics", function () {
     let emissionManager;
     let sender;
     let accounts;
@@ -22,15 +19,15 @@ describe("StakedAave V2. Basics", function () {
     let bicoToken;
     let bicoRewardPool;
     let rewardPoolToInteract;
-    let STAKED_AAVE_NAME, STAKED_AAVE_SYMBOL, STAKED_AAVE_DECIMALS, COOLDOWN_SECONDS, UNSTAKE_WINDOW ;
+    let STAKED_TOKEN_NAME, STAKED_TOKEN_SYMBOL, STAKED_TOKEN_DECIMALS, COOLDOWN_SECONDS, UNSTAKE_WINDOW ;
     let ZERO_ADDRESS;
     let assetConfig;
     let secondStaker;
 
     before(async function () {
-        STAKED_AAVE_NAME = 'Staked Bico';
-        STAKED_AAVE_SYMBOL = 'stkBICO';
-        STAKED_AAVE_DECIMALS = 18;
+        STAKED_TOKEN_NAME = 'Staked Bico';
+        STAKED_TOKEN_SYMBOL = 'stkBICO';
+        STAKED_TOKEN_DECIMALS = 18;
         COOLDOWN_SECONDS = '3600'; // 1 hour in seconds
         UNSTAKE_WINDOW = '1800'; // 30 min in seconds
         distributionDuration = 3153600000;
@@ -68,9 +65,9 @@ describe("StakedAave V2. Basics", function () {
             bicoRewardPool.address, 
             emissionManager.address,
             distributionDuration, 
-            STAKED_AAVE_NAME,
-            STAKED_AAVE_SYMBOL, 
-            STAKED_AAVE_DECIMALS, 
+            STAKED_TOKEN_NAME,
+            STAKED_TOKEN_SYMBOL, 
+            STAKED_TOKEN_DECIMALS,
             ZERO_ADDRESS
         );
         await stakedTokenV2.deployed();

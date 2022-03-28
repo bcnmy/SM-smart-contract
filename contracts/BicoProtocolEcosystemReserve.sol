@@ -102,7 +102,7 @@ abstract contract VersionedInitializable {
   /**
    * @dev Indicates that the contract has been initialized.
    */
-  uint256 internal lastInitializedRevision = 0;
+  uint256 internal lastInitializedRevision;
 
   /**
    * @dev Modifier to use in the initializer function of a contract.

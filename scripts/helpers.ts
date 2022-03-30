@@ -8,24 +8,32 @@ import {
     // eslint-disable-next-line node/no-missing-import
 } from "../typechain";
 
+interface IStakingConfig {
+  stakedToken: string,
+  name: string,
+  symbol: string,
+  emissionPerSecond: string,
+  totalSupply: string
+}
+
 interface IDeployConfig {
-    stakedToken: string,
+    bicoStaking: IStakingConfig[],
     rewardToken: string,
     cooldownSeconds: number,
     unstakeWindow: number,
     rewardsVault: string,
     emissionManager: string,
     distributionDuration: number,
-    name: string,
-    symbol: string,
+    
     decimals: number,
     governance: string,
     trustedForwarder: string
 }
 
 interface IContracts {
-    // bicoRewardVault: BicoProtocolEcosystemReserve;
+    bicoRewardVault: BicoProtocolEcosystemReserve;
     bicoStaking: StakedTokenV3;
+    bbptStaking: StakedTokenV3;
 }
 
 const wait = (time: number) : Promise<void> => {
@@ -37,61 +45,116 @@ const wait = (time: number) : Promise<void> => {
 const deploy = async (deployConfig: IDeployConfig) => {
     const contracts = await deployCoreContracts(deployConfig);
   
-    // await configure(contracts, deployConfig.bicoOwner);
-    await verify(contracts);
+    // await configure(contracts, deployConfig, deployConfig.bicoOwner);
+    await verify(contracts, deployConfig);
 };
 
 async function deployCoreContracts(deployConfig: IDeployConfig): Promise<any> {
-  try{
-
     const [deployer] = await ethers.getSigners();
     console.log("Deployer:", deployer.address);
 
-    // Deploy Bico Reward vault
-    // const BicoProtocolEcosystemReserve = await ethers.getContractFactory("BicoProtocolEcosystemReserve");
-    // console.log("Deploying BicoProtocolEcosystemReserve...");
-    // const bicoRewardVault = (await upgrades.deployProxy(BicoProtocolEcosystemReserve,[
-    //   deployConfig.emissionManager
-    // ])) as BicoProtocolEcosystemReserve;
-    // await bicoRewardVault.deployed();
+    /* Deploy Bico Reward vault */
+    const BicoProtocolEcosystemReserve = await ethers.getContractFactory("BicoProtocolEcosystemReserve");
+    console.log("Deploying BicoProtocolEcosystemReserve...");
+    const bicoRewardVault = (await upgrades.deployProxy(
+      BicoProtocolEcosystemReserve,
+      [
+        deployConfig.emissionManager
+      ]
+    )) as BicoProtocolEcosystemReserve;
+    await bicoRewardVault.deployed();
 
-    // console.log("bicoRewardVault Proxy deployed to:", bicoRewardVault.address);
-    // await wait(5000);
-
-    // return { bicoRewardVault };
-    console.log(JSON.stringify(deployConfig));
-    const StakedTokenV3 = await ethers.getContractFactory("StakedTokenV3");
-    console.log("Deploying StakedTokenV3...");
-    const bicoStaking = (await upgrades.deployProxy(
-      StakedTokenV3, [
-      // stakedToken: deployConfig.stakedToken,
-      // deployConfig.rewardToken,
-      // deployConfig.cooldownSeconds,
-      // deployConfig.unstakeWindow,
-      // "0x7E3EC659C65b48FC74e528f81774D31E5A1dA8F9",
-      // deployConfig.emissionManager,
-      // deployConfig.distributionDuration,
-      // deployConfig.name,
-      // deployConfig.symbol,
-      // deployConfig.decimals,
-      // deployConfig.governance
-    ])) as StakedTokenV3;
-    await bicoStaking.deployed();
-
-    console.log("bicoStaking Proxy deployed to:", bicoStaking.address);
+    console.log("bicoRewardVault Proxy deployed to:", bicoRewardVault.address);
     await wait(5000);
 
-    return { bicoStaking };
-  } catch (error){
-    console.log(error);
-    return null;
-  }
+    console.log(JSON.stringify(deployConfig));
+    const StakedTokenV3 = await ethers.getContractFactory("StakedTokenV3");
+    console.log("Deploying BicoStaking Contract...");
+    const bicoStaking = (await upgrades.deployProxy(
+      StakedTokenV3, 
+      [
+          deployConfig.bicoStaking[0].name,
+          deployConfig.bicoStaking[0].symbol,
+          deployConfig.decimals,
+          deployConfig.trustedForwarder
+      ],
+      { constructorArgs: [
+          deployConfig.bicoStaking[0].stakedToken,
+          deployConfig.rewardToken,
+          deployConfig.cooldownSeconds,
+          deployConfig.unstakeWindow,
+          bicoRewardVault.address,
+          deployConfig.emissionManager,
+          deployConfig.distributionDuration,
+          deployConfig.bicoStaking[0].name,
+          deployConfig.bicoStaking[0].symbol,
+          deployConfig.decimals,
+          deployConfig.governance
+        ],
+        unsafeAllow: ["state-variable-assignment","state-variable-immutable","constructor"]
+      },
+    )) as StakedTokenV3;
+    
+    await bicoStaking.deployed();
+    console.log("bicoStaking Proxy deployed to:", bicoStaking.address);
+    await wait(5000);
+    
+    //BBPT staking deploy 
+    console.log("Deploying Bbpt Staking Contract...");
+    const bbptStaking = (await upgrades.deployProxy(
+      StakedTokenV3, 
+      [
+          deployConfig.bicoStaking[1].name,
+          deployConfig.bicoStaking[1].symbol,
+          deployConfig.decimals,
+          deployConfig.trustedForwarder
+      ],
+      { constructorArgs: [
+          deployConfig.bicoStaking[1].stakedToken,
+          deployConfig.rewardToken,
+          deployConfig.cooldownSeconds,
+          deployConfig.unstakeWindow,
+          bicoRewardVault.address,
+          deployConfig.emissionManager,
+          deployConfig.distributionDuration,
+          deployConfig.bicoStaking[1].name,
+          deployConfig.bicoStaking[1].symbol,
+          deployConfig.decimals,
+          deployConfig.governance
+        ],
+        unsafeAllow: ["state-variable-assignment","state-variable-immutable","constructor"]
+      },
+    )) as StakedTokenV3;
+
+    await bbptStaking.deployed();
+    console.log("bbptStaking Proxy deployed to:", bbptStaking.address);
+    await wait(5000);
+
+    return { bicoRewardVault, bicoStaking, bbptStaking };
 }
 
-// const configure = async (contracts: IContracts, bicoOwner: string) => {
-//     await wait(5000);
-//     await (await contracts.liquidityProviders.setTokenManager(contracts.tokenManager.address)).wait();
-// }
+const configure = async (contracts: IContracts, deployConfig: IDeployConfig, bicoOwner: string) => {
+    await wait(5000);
+    //assetConfigure in BicoStaking
+    await (await contracts.bicoStaking.configureAssets(
+      [
+        ethers.BigNumber.from(deployConfig.bicoStaking[0].emissionPerSecond), 
+        ethers.BigNumber.from(deployConfig.bicoStaking[0].totalSupply),
+        contracts.bicoStaking.address
+      ]
+    )).wait();
+
+    //assetConfigure in BbptStaking
+    await wait(5000);
+    await (await contracts.bbptStaking.configureAssets(
+      [
+        ethers.BigNumber.from(deployConfig.bicoStaking[1].emissionPerSecond), 
+        ethers.BigNumber.from(deployConfig.bicoStaking[1].totalSupply),
+        contracts.bicoStaking.address
+      ]
+    )).wait();
+    
+}
 
 const getImplementationAddress = async (proxyAddress: string) => {
     return ethers.utils.hexlify(
@@ -105,23 +168,44 @@ const getImplementationAddress = async (proxyAddress: string) => {
     );
 };
 
-const verifyImplementation = async (address: string) => {
+const verifyImplementation = async (address: string, deployConfig?: IDeployConfig, stakingTokenConfig?: IStakingConfig) => {
     try {
-      await run("verify:verify", {
-        address: await getImplementationAddress(address),
-      });
+      if(deployConfig && stakingTokenConfig){
+        await run("verify:verify", {
+          address: await getImplementationAddress(address),
+          constructorArguments: [
+            stakingTokenConfig.stakedToken,
+            deployConfig.rewardToken,
+            deployConfig.cooldownSeconds,
+            deployConfig.unstakeWindow,
+            deployConfig.rewardsVault,
+            deployConfig.emissionManager,
+            deployConfig.distributionDuration,
+            stakingTokenConfig.name,
+            stakingTokenConfig.symbol,
+            deployConfig.decimals,
+            deployConfig.governance
+          ]
+        });
+      } else {
+        await run("verify:verify", {
+          address: await getImplementationAddress(address),
+        });
+      }
     } catch (e) {
       console.log(`Failed to verify Contract ${address} `, e);
     }
 };
 
 const verify = async (
-    contracts: IContracts
+    contracts: IContracts,
+    deployConfig: IDeployConfig
   ) => {
     console.log("Verifying Contracts...");
     
-    // await verifyImplementation(contracts.bicoRewardVault.address);
-    await verifyImplementation("0xe9Dcaab861cf77b94Bf56887e9a2df82D60992BA");
+    await verifyImplementation(contracts.bicoRewardVault.address);
+    await verifyImplementation(contracts.bicoStaking.address, deployConfig, deployConfig.bicoStaking[0]);
+    await verifyImplementation(contracts.bbptStaking.address, deployConfig, deployConfig.bicoStaking[1]);
     
 }
 

@@ -7,7 +7,7 @@
  * @author Aave
  **/
 
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 import "./GovernancePowerDelegationERC20.sol";
 import "../interface/ITransferHook.sol";
 

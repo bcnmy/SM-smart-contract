@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // File contracts/lib/SafeERC20.sol
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 import "./SafeMath.sol";
 import "./Address.sol";
 import "../interface/IERC20.sol";

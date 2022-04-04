@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // File contracts/utils/VersionedInitializable.sol
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 /**
  * @title VersionedInitializable
  *

@@ -102,7 +102,7 @@ abstract contract VersionedInitializable {
   /**
    * @dev Indicates that the contract has been initialized.
    */
-  uint256 internal lastInitializedRevision = 0;
+  uint256 internal lastInitializedRevision;
 
   /**
    * @dev Modifier to use in the initializer function of a contract.
@@ -158,23 +158,24 @@ contract BicoProtocolEcosystemReserve is VersionedInitializable {
     IERC20 token,
     address recipient,
     uint256 amount
-  ) external onlyFundsAdmin {
-    token.approve(recipient, amount);
+  ) external onlyFundsAdmin returns (bool) {
+    return token.approve(recipient, amount);
   }
 
   function transfer(
     IERC20 token,
     address recipient,
     uint256 amount
-  ) external onlyFundsAdmin {
-    token.transfer(recipient, amount);
+  ) external onlyFundsAdmin returns (bool) {
+    return token.transfer(recipient, amount);
   }
 
-  function setFundsAdmin(address admin) public onlyFundsAdmin {
+  function setFundsAdmin(address admin) external onlyFundsAdmin {
     _setFundsAdmin(admin);
   }
 
   function _setFundsAdmin(address admin) internal {
+    require(admin != address(0), 'ADMIN_CANNOT_BE_ZERO');
     _fundsAdmin = admin;
     emit NewFundsAdmin(admin);
   }

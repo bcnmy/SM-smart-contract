@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 // File contracts/interfaces/IERC20.sol
-pragma solidity ^0.7.5;
-pragma experimental ABIEncoderV2;
+pragma solidity 0.7.5;
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // File @aave/aave-token/contracts/interfaces/IGovernancePowerDelegationToken.sol@v1.0.4
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 
 interface IGovernancePowerDelegationToken {
   enum DelegationType {VOTING_POWER, PROPOSITION_POWER}

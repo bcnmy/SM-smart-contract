@@ -6,8 +6,9 @@
  * @author Aave
  **/
 
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 pragma experimental ABIEncoderV2;
+import "./helper/ReentrancyGuardUpgradeable.sol";
 import "./AaveDistributionManager.sol";
 import "./interface/IERC20.sol";
 import "./interface/IGovernancePowerDelegationToken.sol";
@@ -30,7 +31,8 @@ contract StakedTokenV3 is
   GovernancePowerWithSnapshot,
   VersionedInitializable,
   AaveDistributionManager,
-  ERC2771Context
+  ERC2771Context,
+  ReentrancyGuardUpgradeable
 {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
@@ -91,6 +93,9 @@ contract StakedTokenV3 is
     uint8 decimals,
     address governance
   ) public ERC20(name, symbol) AaveDistributionManager(emissionManager, distributionDuration) {
+    require(address(stakedToken) != address(0), "STAKED_TOKEN_ADDRESS_CANNOT_BE_ZERO");
+    require(address(rewardToken) != address(0), "REWARD_TOKEN_ADDRESS_CANNOT_BE_ZERO");
+    require(rewardsVault != address(0), "REWARD_VAULT_ADDRESS_CANNOT_BE_ZERO");
     STAKED_TOKEN = stakedToken;
     REWARD_TOKEN = rewardToken;
     COOLDOWN_SECONDS = cooldownSeconds;
@@ -111,6 +116,8 @@ contract StakedTokenV3 is
   ) external {
     require(_trustedForwarder != address(0), "TrustForwarder address can't be 0");
     initializeTrustedForwarder(_trustedForwarder);
+
+    __ReentrancyGuard_init();
 
     uint256 chainId;
 
@@ -169,7 +176,7 @@ contract StakedTokenV3 is
    * @param to Address to redeem to
    * @param amount Amount to redeem
    **/
-  function redeem(address to, uint256 amount) external override {
+  function redeem(address to, uint256 amount) external override nonReentrant {
     require(amount != 0, 'INVALID_ZERO_AMOUNT');
     //solium-disable-next-line
     uint256 cooldownStartTimestamp = stakersCooldowns[_msgSender()];
@@ -215,7 +222,7 @@ contract StakedTokenV3 is
    * @param to Address to stake for
    * @param amount Amount to stake
    **/
-  function claimRewards(address to, uint256 amount) external override {
+  function claimRewards(address to, uint256 amount) external override nonReentrant {
     uint256 newTotalRewards =
       _updateCurrentUnclaimedRewards(_msgSender(), balanceOf(_msgSender()), false);
     uint256 amountToClaim = (amount == type(uint256).max) ? newTotalRewards : amount;
@@ -493,7 +500,7 @@ contract StakedTokenV3 is
     uint8 v,
     bytes32 r,
     bytes32 s
-  ) public {
+  ) external {
     bytes32 structHash =
       keccak256(
         abi.encode(DELEGATE_BY_TYPE_TYPEHASH, delegatee, uint256(delegationType), nonce, expiry)

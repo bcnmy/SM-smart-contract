@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // File contracts/interfaces/IStakedAave.sol
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 
 interface IStakedAave {
   function stake(address to, uint256 amount) external;

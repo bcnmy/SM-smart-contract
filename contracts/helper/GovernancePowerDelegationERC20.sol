@@ -5,7 +5,7 @@
  * @notice implementation of the AAVE token contract
  * @author Aave
  */
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 import "./ERC20.sol";
 import "../interface/IGovernancePowerDelegationToken.sol";
 

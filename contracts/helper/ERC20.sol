@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // File @aave/aave-token/contracts/open-zeppelin/ERC20.sol@v1.0.4
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 import "./Context.sol";
 import "../interface/IERC20.sol";
 import "../lib/SafeMath.sol";

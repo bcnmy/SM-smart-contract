@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // File contracts/stake/AaveDistributionManager.sol
-pragma solidity ^0.7.5;
+pragma solidity 0.7.5;
 pragma experimental ABIEncoderV2;
 import "./DistributionTypes.sol";
 import "./lib/SafeMath.sol";
@@ -25,8 +25,6 @@ contract AaveDistributionManager is IAaveDistributionManager {
 
   address public immutable EMISSION_MANAGER;
 
-  uint8 public constant PRECISION = 18;
-
   mapping(address => AssetData) public assets;
 
   event AssetConfigUpdated(address indexed asset, uint256 emission);
@@ -34,6 +32,7 @@ contract AaveDistributionManager is IAaveDistributionManager {
   event UserIndexUpdated(address indexed user, address indexed asset, uint256 index);
 
   constructor(address emissionManager, uint256 distributionDuration) public {
+    require(emissionManager!=address(0), "EMMISSION_MANAGER_CANNOT_BE_ZERO");
     DISTRIBUTION_END = block.timestamp.add(distributionDuration);
     EMISSION_MANAGER = emissionManager;
   }
@@ -198,7 +197,7 @@ contract AaveDistributionManager is IAaveDistributionManager {
     uint256 reserveIndex,
     uint256 userIndex
   ) internal pure returns (uint256) {
-    return principalUserBalance.mul(reserveIndex.sub(userIndex)).div(10**uint256(PRECISION));
+    return principalUserBalance.mul(reserveIndex.sub(userIndex)).div(1e18);
   }
 
   /**
@@ -228,7 +227,7 @@ contract AaveDistributionManager is IAaveDistributionManager {
       block.timestamp > DISTRIBUTION_END ? DISTRIBUTION_END : block.timestamp;
     uint256 timeDelta = currentTimestamp.sub(lastUpdateTimestamp);
     return
-      emissionPerSecond.mul(timeDelta).mul(10**uint256(PRECISION)).div(totalBalance).add(
+      emissionPerSecond.mul(timeDelta).mul(1e18).div(totalBalance).add(
         currentIndex
       );
   }
@@ -239,7 +238,7 @@ contract AaveDistributionManager is IAaveDistributionManager {
    * @param asset The address of the reference asset of the distribution
    * @return The new index
    **/
-  function getUserAssetData(address user, address asset) public view returns (uint256) {
+  function getUserAssetData(address user, address asset) external view returns (uint256) {
     return assets[asset].users[user];
   }
 }

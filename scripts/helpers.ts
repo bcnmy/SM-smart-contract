@@ -1,6 +1,4 @@
 import { run, ethers, upgrades } from "hardhat";
-import { BigNumberish, Contract, ContractFactory } from "ethers";
-import { initializeBicoVault } from "./deploy-bicoEco";
 
 import {
     BicoProtocolEcosystemReserve,
@@ -47,6 +45,7 @@ const deploy = async (deployConfig: IDeployConfig) => {
   
     // await configure(contracts, deployConfig, deployConfig.bicoOwner);
     await verify(contracts, deployConfig);
+
 };
 
 async function deployCoreContracts(deployConfig: IDeployConfig): Promise<any> {
@@ -65,11 +64,13 @@ async function deployCoreContracts(deployConfig: IDeployConfig): Promise<any> {
     await bicoRewardVault.deployed();
 
     console.log("bicoRewardVault Proxy deployed to:", bicoRewardVault.address);
-    await wait(5000);
+    await wait(8000);
 
     console.log(JSON.stringify(deployConfig));
     const StakedTokenV3 = await ethers.getContractFactory("StakedTokenV3");
     console.log("Deploying BicoStaking Contract...");
+
+    //Bico staking deployment
     const bicoStaking = (await upgrades.deployProxy(
       StakedTokenV3, 
       [
@@ -83,7 +84,7 @@ async function deployCoreContracts(deployConfig: IDeployConfig): Promise<any> {
           deployConfig.rewardToken,
           deployConfig.cooldownSeconds,
           deployConfig.unstakeWindow,
-          bicoRewardVault.address,
+          deployConfig.rewardsVault,
           deployConfig.emissionManager,
           deployConfig.distributionDuration,
           deployConfig.bicoStaking[0].name,
@@ -97,7 +98,7 @@ async function deployCoreContracts(deployConfig: IDeployConfig): Promise<any> {
     
     await bicoStaking.deployed();
     console.log("bicoStaking Proxy deployed to:", bicoStaking.address);
-    await wait(5000);
+    await wait(8000);
     
     //BBPT staking deploy 
     console.log("Deploying Bbpt Staking Contract...");
@@ -114,7 +115,7 @@ async function deployCoreContracts(deployConfig: IDeployConfig): Promise<any> {
           deployConfig.rewardToken,
           deployConfig.cooldownSeconds,
           deployConfig.unstakeWindow,
-          bicoRewardVault.address,
+          deployConfig.rewardsVault,
           deployConfig.emissionManager,
           deployConfig.distributionDuration,
           deployConfig.bicoStaking[1].name,
@@ -128,32 +129,13 @@ async function deployCoreContracts(deployConfig: IDeployConfig): Promise<any> {
 
     await bbptStaking.deployed();
     console.log("bbptStaking Proxy deployed to:", bbptStaking.address);
-    await wait(5000);
+    await wait(8000);
 
-    return { bicoRewardVault, bicoStaking, bbptStaking };
-}
-
-const configure = async (contracts: IContracts, deployConfig: IDeployConfig, bicoOwner: string) => {
-    await wait(5000);
-    //assetConfigure in BicoStaking
-    await (await contracts.bicoStaking.configureAssets(
-      [
-        ethers.BigNumber.from(deployConfig.bicoStaking[0].emissionPerSecond), 
-        ethers.BigNumber.from(deployConfig.bicoStaking[0].totalSupply),
-        contracts.bicoStaking.address
-      ]
-    )).wait();
-
-    //assetConfigure in BbptStaking
-    await wait(5000);
-    await (await contracts.bbptStaking.configureAssets(
-      [
-        ethers.BigNumber.from(deployConfig.bicoStaking[1].emissionPerSecond), 
-        ethers.BigNumber.from(deployConfig.bicoStaking[1].totalSupply),
-        contracts.bicoStaking.address
-      ]
-    )).wait();
-    
+    return { 
+      bicoRewardVault, 
+      bicoStaking, 
+      bbptStaking 
+    };
 }
 
 const getImplementationAddress = async (proxyAddress: string) => {
@@ -169,7 +151,7 @@ const getImplementationAddress = async (proxyAddress: string) => {
 };
 
 const verifyImplementation = async (address: string, deployConfig?: IDeployConfig, stakingTokenConfig?: IStakingConfig) => {
-    try {
+  try {
       if(deployConfig && stakingTokenConfig){
         await run("verify:verify", {
           address: await getImplementationAddress(address),

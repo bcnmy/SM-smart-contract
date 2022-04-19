@@ -74,6 +74,7 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
     kovan: {
       url: process.env.KOVAN_URL,
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 2000000000
     },
     polygonMumbai: {
       url: process.env.MUMBAI_URL || "",
@@ -95,7 +96,7 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
     mainnet: {
       url: process.env.MAINNET_URL || "",
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
-      gasPrice: 50000000000
+      gasPrice: 70000000000
     }
   },
   gasReporter: {
